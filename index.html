@@ -135,16 +135,7 @@
   <span id="driver-name"></span>
   <span id="status-text">Loading…</span>
   <span id="attempt-count"></span>
-  <div id="countdown-wrap">
-    <div id="countdown-ring"></div>
-    <span id="countdown-num"></span>
-    <span>Reloading…</span>
-    <button onclick="cancelCountdownAndReload()"
-      style="padding:3px 10px;border:none;border-radius:4px;background:#27ae60;color:#fff;font-size:11px;cursor:pointer;">
-      Now
-    </button>
-  </div>
-  <button id="reload-btn" onclick="reloadForm()">↺ Reload</button>
+  <button id="reload-btn" onclick="reloadForm()">↺ Reload Form</button>
 </div>
 
 <div id="error-screen">
@@ -212,7 +203,6 @@ function buildFormUrl(driver) {
 // ═══════════════════════════════════════════════════════════════
 const MAX_ATTEMPTS     = 5;
 const CHECK_DELAY_MS   = 3500;
-const AUTO_RELOAD_SECS = 4;
 const RELOAD_PAUSE_MS  = 800;
 
 // ── DOM refs ──────────────────────────────────────────────────
@@ -222,20 +212,16 @@ const statusText    = document.getElementById('status-text');
 const driverName    = document.getElementById('driver-name');
 const attemptCount  = document.getElementById('attempt-count');
 const reloadBtn     = document.getElementById('reload-btn');
-const countdownWrap = document.getElementById('countdown-wrap');
-const countdownRing = document.getElementById('countdown-ring');
-const countdownNum  = document.getElementById('countdown-num');
 const errorScreen   = document.getElementById('error-screen');
 const errorMsg      = document.getElementById('error-msg');
 const formContainer = document.getElementById('form-container');
 
-let attempts        = 0;
+let attempts         = 0;
 let locationCaptured = false;
-let isChecking      = false;   // prevent overlapping geolocation calls
-let isReloading     = false;   // suppress onIframeLoad during blank→src transition
-let checkTimer      = null;
-let countdownTimer  = null;
-let formUrl         = null;
+let isChecking       = false;
+let isReloading      = false;
+let checkTimer       = null;
+let formUrl          = null;
 
 // ── Boot: resolve driver from ?id= ───────────────────────────
 (function init() {
@@ -275,11 +261,10 @@ function showError(msg) {
 }
 
 // ── Status helper ─────────────────────────────────────────────
-function setStatus(type, message, { showReloadBtn = false, showCountdown = false } = {}) {
-  statusBar.className         = type;
-  statusText.textContent      = message;
-  reloadBtn.style.display     = showReloadBtn ? 'inline-block' : 'none';
-  countdownWrap.style.display = showCountdown ? 'flex' : 'none';
+function setStatus(type, message, { showReloadBtn = false } = {}) {
+  statusBar.className     = type;
+  statusText.textContent  = message;
+  reloadBtn.style.display = showReloadBtn ? 'inline-block' : 'none';
 }
 
 function updateAttemptLabel() {
@@ -287,40 +272,8 @@ function updateAttemptLabel() {
 }
 
 // ── Countdown ring ────────────────────────────────────────────
-function startCountdown(seconds, onComplete) {
-  clearInterval(countdownTimer);
-  let remaining = seconds;
-  countdownNum.textContent = remaining + 's';
-  updateRing(remaining, seconds);
-
-  countdownTimer = setInterval(() => {
-    remaining--;
-    countdownNum.textContent = remaining + 's';
-    updateRing(remaining, seconds);
-    if (remaining <= 0) {
-      clearInterval(countdownTimer);
-      onComplete();
-    }
-  }, 1000);
-}
-
-function updateRing(remaining, total) {
-  const deg = (remaining / total) * 360;
-  countdownRing.style.background = `conic-gradient(#27ae60 ${deg}deg, #c8f0d8 ${deg}deg)`;
-}
-
-function cancelCountdownAndReload() {
-  clearInterval(countdownTimer);
-  countdownWrap.style.display = 'none';
-  doIframeReload();
-}
-
 // ── Reload logic ──────────────────────────────────────────────
 function reloadForm() {
-  if (attempts >= MAX_ATTEMPTS) {
-    setStatus('error', 'Could not capture location. Please allow access and tap Reload.', { showReloadBtn: true });
-    return;
-  }
   attempts++;
   updateAttemptLabel();
   setStatus('waiting', 'Reloading form…');
@@ -347,35 +300,22 @@ function checkLocation() {
   isChecking = true;
 
   navigator.geolocation.getCurrentPosition(
-    (pos) => {
+    () => {
       isChecking = false;
       locationCaptured = true;
       clearTimeout(checkTimer);
-      const lat = pos.coords.latitude.toFixed(4);
-      const lng = pos.coords.longitude.toFixed(4);
-
-      setStatus('success', `Location confirmed ✓ (${lat}, ${lng}) — reloading form…`, { showCountdown: true });
       attemptCount.textContent = '';
-
-      startCountdown(AUTO_RELOAD_SECS, () => {
-        countdownWrap.style.display = 'none';
-        setStatus('success', `Location confirmed ✓ — form ready`);
-        reloadBtn.style.display = 'inline-block';
-        reloadBtn.textContent   = '↺ Reload again';
-        doIframeReload();
-      });
+      setStatus('success', 'Location confirmed ✓ — tap Reload to load the form', { showReloadBtn: true });
+      reloadBtn.textContent = '↺ Reload Form';
     },
     (err) => {
       isChecking = false;
       if (err.code === err.PERMISSION_DENIED) {
         setStatus('error', 'Location denied. Please allow location in browser settings.', { showReloadBtn: true });
+        reloadBtn.textContent = '↺ Try Again';
       } else {
-        if (attempts < MAX_ATTEMPTS) {
-          setStatus('waiting', 'Location not ready — retrying…');
-          setTimeout(reloadForm, 800);
-        } else {
-          setStatus('error', 'Could not capture location after several attempts.', { showReloadBtn: true });
-        }
+        setStatus('waiting', 'Could not get location. Please allow location access and try again.', { showReloadBtn: true });
+        reloadBtn.textContent = '↺ Try Again';
       }
     },
     { timeout: 8000, maximumAge: 0, enableHighAccuracy: true }
@@ -383,7 +323,6 @@ function checkLocation() {
 }
 
 function onIframeLoad() {
-  // Ignore the blank-page transition and ignore if already done
   if (isReloading || locationCaptured || isChecking) return;
   if (attempts === 0) setStatus('waiting', 'Checking location…');
   scheduleCheck();
