@@ -276,7 +276,12 @@ function updateAttemptLabel() {
 function reloadForm() {
   attempts++;
   updateAttemptLabel();
-  setStatus('waiting', 'Reloading form…');
+  // Reset so location is re-obtained on every reload
+  locationCaptured = false;
+  isChecking       = false;
+  clearTimeout(checkTimer);
+  setStatus('waiting', 'Reloading form and re-checking location…');
+  reloadBtn.style.display = 'none';
   doIframeReload();
 }
 
@@ -286,6 +291,8 @@ function doIframeReload() {
   setTimeout(() => {
     isReloading = false;
     iframe.src = formUrl;
+    // Re-check location immediately on each reload
+    setTimeout(checkLocation, CHECK_DELAY_MS);
   }, RELOAD_PAUSE_MS);
 }
 
