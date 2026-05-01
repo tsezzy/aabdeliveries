@@ -134,7 +134,6 @@
   <div id="status-dot"></div>
   <span id="driver-name"></span>
   <span id="status-text">Loading…</span>
-  <span id="attempt-count"></span>
   <button id="reload-btn" onclick="reloadForm()">↺ Reload Form</button>
 </div>
 
@@ -149,115 +148,70 @@
 
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  BASE FORM URL — single form for all drivers
+//  CONFIG — set your Worker URL here after deploying
 // ═══════════════════════════════════════════════════════════════
-const BASE_URL = "https://forms.zohopublic.com/aabtools/form/DeliveryConfirmation/formperma/oQVlU_uk7phzYTegYDfggCMLueZGCrkS-3fxyNoYt8s";
+const WORKER_URL = "rapid-snow-6833.aab-group.workers.dev";
 
-// ═══════════════════════════════════════════════════════════════
-//  DRIVER TABLE
-//  id     → used in the WhatsApp link  (?id=vinu)
-//  name   → driver's full name         (maps to ne=)
-//  mobile → driver's mobile number     (maps to me=)
-//  role   → driver's role              (maps to re=)
-// ═══════════════════════════════════════════════════════════════
-const DRIVERS = [
-  { id: "vinu",        name: "Vinu Krishnan Vikraman Pillai", mobile: "0506351465", role: "AAB Driver" },
-  { id: "dil",         name: "Dil Kumar Rai",                 mobile: "0501234001", role: "AAB Driver" },
-  { id: "khaliq",      name: "Muhammad Khaliq",               mobile: "0501234002", role: "AAB Driver" },
-  { id: "shyam",       name: "Shyam Kumar Granja Magar",      mobile: "0501234003", role: "AAB Driver" },
-  { id: "abdulnaseer", name: "Abdulnaseer Kalanduyan",        mobile: "0501234004", role: "AAB Driver" },
-  { id: "sekar",       name: "Sekar Ramasamy",                mobile: "0501234005", role: "AAB Driver" },
-  { id: "jaleel",      name: "Abdul Jaleel Baag",             mobile: "0501234006", role: "AAB Driver" },
-  { id: "sudhakar",    name: "Sudhakar Subramaniyan",         mobile: "0501234007", role: "AAB Driver" },
-  { id: "sufiyan",     name: "Mahamed Sufiyan",               mobile: "0501234008", role: "AAB Driver" },
-  { id: "shahzad",     name: "Shahzad Muhammad Khan",         mobile: "0501234009", role: "AAB Driver" },
-  { id: "akhtar",      name: "Md Akhtar",                     mobile: "0501234010", role: "AAB Driver" },
-  { id: "munner",      name: "Munner Ahmed",                  mobile: "0501234011", role: "AAB Driver" },
-  { id: "suresh",      name: "Suresh Jothi",                  mobile: "0501234012", role: "AAB Driver" },
-  { id: "raja",        name: "Rajakumaran Rajendiran",        mobile: "0501234013", role: "AAB Driver" },
-  { id: "sarfraz",     name: "Sarfraz Abdul Karim",           mobile: "0501234014", role: "AAB Driver" },
-  { id: "sathiya",     name: "Sathiya Seelan Ganesan",        mobile: "0501234015", role: "AAB Driver" },
-  { id: "rajap",       name: "Raja Pachamuthu",               mobile: "0501234016", role: "AAB Driver" },
-  { id: "senthil",     name: "Senthil Kumar Sellamuthu",      mobile: "0501234017", role: "AAB Driver" },
-  { id: "gurumurthy",  name: "Gurumurthy Durairaj",           mobile: "0501234018", role: "AAB Driver" },
-  { id: "thangarasu",  name: "Thangarasu Appadurai",          mobile: "0501234019", role: "AAB Driver" },
-  { id: "adnan",       name: "Adnan Akram",                   mobile: "0501234020", role: "AAB Driver" },
-  { id: "mustafa",     name: "Muhammad Mustafa",              mobile: "0501234021", role: "AAB Driver" },
-  { id: "anjum",       name: "Muhammad Anjum",                mobile: "0501234022", role: "AAB Driver" },
-  { id: "taher",       name: "Taher Ezzy",                    mobile: "0501234023", role: "AAB Driver" }
-  // ← add more drivers here
-];
-
-// Build the prefilled URL for a driver from their stored fields
-function buildFormUrl(driver) {
-  const params = new URLSearchParams({
-    ne: driver.name,
-    me: driver.mobile,
-    re: driver.role
-  });
-  return `${BASE_URL}?${params.toString()}`;
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  CONFIG
-// ═══════════════════════════════════════════════════════════════
-const MAX_ATTEMPTS     = 5;
-const CHECK_DELAY_MS   = 3500;
-const RELOAD_PAUSE_MS  = 800;
+// ── Config ────────────────────────────────────────────────────
+const CHECK_DELAY_MS  = 3500;
+const RELOAD_PAUSE_MS = 800;
 
 // ── DOM refs ──────────────────────────────────────────────────
 const iframe        = document.getElementById('zoho-iframe');
 const statusBar     = document.getElementById('status-bar');
 const statusText    = document.getElementById('status-text');
 const driverName    = document.getElementById('driver-name');
-const attemptCount  = document.getElementById('attempt-count');
 const reloadBtn     = document.getElementById('reload-btn');
 const errorScreen   = document.getElementById('error-screen');
 const errorMsg      = document.getElementById('error-msg');
 const formContainer = document.getElementById('form-container');
 
-let attempts         = 0;
 let locationCaptured = false;
 let isChecking       = false;
 let isReloading      = false;
 let checkTimer       = null;
 let formUrl          = null;
 
-// ── Boot: resolve driver from ?id= ───────────────────────────
-(function init() {
+// ── Boot ──────────────────────────────────────────────────────
+(async function init() {
   const params   = new URLSearchParams(window.location.search);
-  const driverId = params.get('id');
+  const driverId = (params.get('id') || '').trim();
 
   if (!driverId) {
     showError('No driver ID in link. Please use the personal link sent to you on WhatsApp.');
     return;
   }
 
-  const driver = DRIVERS.find(d => d.id.toLowerCase() === driverId.toLowerCase());
+  setStatus('waiting', 'Loading…');
 
-  if (!driver) {
-    showError(`Unknown driver ID "${driverId}". Please use the personal link sent to you on WhatsApp.`);
-    return;
+  try {
+    const res  = await fetch(`${WORKER_URL}?id=${encodeURIComponent(driverId)}`);
+    const data = await res.json();
+
+    if (!res.ok || data.error) {
+      showError('Link not recognised. Please use the personal link sent to you on WhatsApp.');
+      return;
+    }
+
+    formUrl = data.formUrl;
+    driverName.textContent = data.name + ' —';
+    document.title = data.name + ' | Delivery Form';
+
+    setStatus('waiting', 'Requesting location…');
+    checkLocation();
+    iframe.src = formUrl;
+    iframe.addEventListener('load', onIframeLoad);
+
+  } catch {
+    showError('Could not connect. Please check your internet and try again.');
   }
-
-  formUrl = buildFormUrl(driver);
-  driverName.textContent = driver.name + ' —';
-  document.title = driver.name + ' | Delivery Form';
-
-  // Request location immediately — don't wait for iframe to load
-  setStatus('waiting', 'Requesting location…');
-  checkLocation();
-
-  // Load iframe
-  iframe.src = formUrl;
-  iframe.addEventListener('load', onIframeLoad);
 })();
 
 function showError(msg) {
-  errorScreen.style.display  = 'flex';
+  errorScreen.style.display   = 'flex';
   formContainer.style.display = 'none';
   errorMsg.textContent = msg;
-  setStatus('error', 'Invalid link');
+  setStatus('error', 'Error');
 }
 
 // ── Status helper ─────────────────────────────────────────────
@@ -267,16 +221,8 @@ function setStatus(type, message, { showReloadBtn = false } = {}) {
   reloadBtn.style.display = showReloadBtn ? 'inline-block' : 'none';
 }
 
-function updateAttemptLabel() {
-  attemptCount.textContent = attempts > 0 ? `(try ${attempts}/${MAX_ATTEMPTS})` : '';
-}
-
-// ── Countdown ring ────────────────────────────────────────────
 // ── Reload logic ──────────────────────────────────────────────
 function reloadForm() {
-  attempts++;
-  updateAttemptLabel();
-  // Reset so location is re-obtained on every reload
   locationCaptured = false;
   isChecking       = false;
   clearTimeout(checkTimer);
@@ -291,7 +237,6 @@ function doIframeReload() {
   setTimeout(() => {
     isReloading = false;
     iframe.src = formUrl;
-    // Re-check location immediately on each reload
     setTimeout(checkLocation, CHECK_DELAY_MS);
   }, RELOAD_PAUSE_MS);
 }
@@ -308,10 +253,9 @@ function checkLocation() {
 
   navigator.geolocation.getCurrentPosition(
     () => {
-      isChecking = false;
+      isChecking       = false;
       locationCaptured = true;
       clearTimeout(checkTimer);
-      attemptCount.textContent = '';
       setStatus('success', 'Location confirmed ✓ — tap Reload to load the form', { showReloadBtn: true });
       reloadBtn.textContent = '↺ Reload Form';
     },
@@ -319,11 +263,10 @@ function checkLocation() {
       isChecking = false;
       if (err.code === err.PERMISSION_DENIED) {
         setStatus('error', 'Location denied. Please allow location in browser settings.', { showReloadBtn: true });
-        reloadBtn.textContent = '↺ Try Again';
       } else {
-        setStatus('waiting', 'Could not get location. Please allow location access and try again.', { showReloadBtn: true });
-        reloadBtn.textContent = '↺ Try Again';
+        setStatus('waiting', 'Could not get location. Please allow location and try again.', { showReloadBtn: true });
       }
+      reloadBtn.textContent = '↺ Try Again';
     },
     { timeout: 8000, maximumAge: 0, enableHighAccuracy: true }
   );
@@ -331,7 +274,6 @@ function checkLocation() {
 
 function onIframeLoad() {
   if (isReloading || locationCaptured || isChecking) return;
-  if (attempts === 0) setStatus('waiting', 'Checking location…');
   scheduleCheck();
 }
 </script>
