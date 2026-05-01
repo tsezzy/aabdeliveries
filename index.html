@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Delivery Confirmation</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ── Status bar ── */
+    #status-bar {
+      width: 100%;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #444;
+      background: #fff;
+      border-bottom: 1px solid #e0e0e0;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+      transition: background 0.3s;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    #status-bar.success { background: #e6f9ef; color: #1a7f4b; }
+    #status-bar.error   { background: #fff0f0; color: #c0392b; }
+    #status-bar.waiting { background: #fff8e1; color: #b07d00; }
+
+    #status-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #aaa;
+      flex-shrink: 0;
+    }
+    .success #status-dot { background: #27ae60; }
+    .error   #status-dot { background: #e74c3c; animation: pulse 1s infinite; }
+    .waiting #status-dot { background: #f39c12; animation: pulse 1s infinite; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; } 50% { opacity: 0.3; }
+    }
+
+    #driver-name {
+      font-weight: 700;
+      margin-right: 4px;
+    }
+
+    #attempt-count {
+      font-size: 11px;
+      opacity: 0.7;
+    }
+
+    /* countdown ring */
+    #countdown-wrap {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      margin-left: auto;
+      font-size: 12px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    #countdown-ring {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: conic-gradient(#27ae60 360deg, #c8f0d8 360deg);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    #countdown-ring::after {
+      content: '';
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #e6f9ef;
+    }
+    #countdown-num { font-size: 11px; min-width: 16px; }
+
+    #reload-btn {
+      margin-left: auto;
+      padding: 5px 14px;
+      border: none;
+      border-radius: 4px;
+      background: #3b82f6;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: none;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    #reload-btn:hover { background: #2563eb; }
+
+    /* ── Error / not-found screens ── */
+    #error-screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      padding: 40px 20px;
+      text-align: center;
+      gap: 12px;
+      color: #555;
+    }
+    #error-screen h2 { font-size: 20px; color: #c0392b; }
+    #error-screen p  { font-size: 14px; max-width: 320px; line-height: 1.6; }
+
+    /* ── iframe ── */
+    #form-container { width: 100%; flex: 1; }
+    iframe {
+      width: 100%;
+      height: calc(100vh - 46px);
+      border: none;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+<div id="status-bar" class="waiting">
+  <div id="status-dot"></div>
+  <span id="driver-name"></span>
+  <span id="status-text">Loading…</span>
+  <span id="attempt-count"></span>
+  <div id="countdown-wrap">
+    <div id="countdown-ring"></div>
+    <span id="countdown-num"></span>
+    <span>Reloading…</span>
+    <button onclick="cancelCountdownAndReload()"
+      style="padding:3px 10px;border:none;border-radius:4px;background:#27ae60;color:#fff;font-size:11px;cursor:pointer;">
+      Now
+    </button>
+  </div>
+  <button id="reload-btn" onclick="reloadForm()">↺ Reload</button>
+</div>
+
+<div id="error-screen">
+  <h2>⚠️ Link not recognised</h2>
+  <p id="error-msg">No driver ID was found in this link. Please use the personal link sent to you on WhatsApp.</p>
+</div>
+
+<div id="form-container">
+  <iframe id="zoho-iframe" allow="geolocation" src="about:blank"></iframe>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  BASE FORM URL — single form for all drivers
+// ═══════════════════════════════════════════════════════════════
+const BASE_URL = "https://forms.zohopublic.com/aabtools/form/DeliveryConfirmation/formperma/oQVlU_uk7phzYTegYDfggCMLueZGCrkS-3fxyNoYt8s";
+
+// ═══════════════════════════════════════════════════════════════
+//  DRIVER TABLE
+//  id     → used in the WhatsApp link  (?id=vinu)
+//  name   → driver's full name         (maps to ne=)
+//  mobile → driver's mobile number     (maps to me=)
+//  role   → driver's role              (maps to re=)
+// ═══════════════════════════════════════════════════════════════
+const DRIVERS = [
+  { id: "vinu",        name: "Vinu Krishnan Vikraman Pillai", mobile: "0506351465", role: "AAB Driver" },
+  { id: "dil",         name: "Dil Kumar Rai",                 mobile: "0501234001", role: "AAB Driver" },
+  { id: "khaliq",      name: "Muhammad Khaliq",               mobile: "0501234002", role: "AAB Driver" },
+  { id: "shyam",       name: "Shyam Kumar Granja Magar",      mobile: "0501234003", role: "AAB Driver" },
+  { id: "abdulnaseer", name: "Abdulnaseer Kalanduyan",        mobile: "0501234004", role: "AAB Driver" },
+  { id: "sekar",       name: "Sekar Ramasamy",                mobile: "0501234005", role: "AAB Driver" },
+  { id: "jaleel",      name: "Abdul Jaleel Baag",             mobile: "0501234006", role: "AAB Driver" },
+  { id: "sudhakar",    name: "Sudhakar Subramaniyan",         mobile: "0501234007", role: "AAB Driver" },
+  { id: "sufiyan",     name: "Mahamed Sufiyan",               mobile: "0501234008", role: "AAB Driver" },
+  { id: "shahzad",     name: "Shahzad Muhammad Khan",         mobile: "0501234009", role: "AAB Driver" },
+  { id: "akhtar",      name: "Md Akhtar",                     mobile: "0501234010", role: "AAB Driver" },
+  { id: "munner",      name: "Munner Ahmed",                  mobile: "0501234011", role: "AAB Driver" },
+  { id: "suresh",      name: "Suresh Jothi",                  mobile: "0501234012", role: "AAB Driver" },
+  { id: "raja",        name: "Rajakumaran Rajendiran",        mobile: "0501234013", role: "AAB Driver" },
+  { id: "sarfraz",     name: "Sarfraz Abdul Karim",           mobile: "0501234014", role: "AAB Driver" },
+  { id: "sathiya",     name: "Sathiya Seelan Ganesan",        mobile: "0501234015", role: "AAB Driver" },
+  { id: "rajap",       name: "Raja Pachamuthu",               mobile: "0501234016", role: "AAB Driver" },
+  { id: "senthil",     name: "Senthil Kumar Sellamuthu",      mobile: "0501234017", role: "AAB Driver" },
+  { id: "gurumurthy",  name: "Gurumurthy Durairaj",           mobile: "0501234018", role: "AAB Driver" },
+  { id: "thangarasu",  name: "Thangarasu Appadurai",          mobile: "0501234019", role: "AAB Driver" },
+  { id: "adnan",       name: "Adnan Akram",                   mobile: "0501234020", role: "AAB Driver" },
+  { id: "mustafa",     name: "Muhammad Mustafa",              mobile: "0501234021", role: "AAB Driver" },
+  { id: "anjum",       name: "Muhammad Anjum",                mobile: "0501234022", role: "AAB Driver" },
+  { id: "taher",       name: "Taher Ezzy",                    mobile: "0501234023", role: "AAB Driver" }
+  // ← add more drivers here
+];
+
+// Build the prefilled URL for a driver from their stored fields
+function buildFormUrl(driver) {
+  const params = new URLSearchParams({
+    ne: driver.name,
+    me: driver.mobile,
+    re: driver.role
+  });
+  return `${BASE_URL}?${params.toString()}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════════════════════════
+const MAX_ATTEMPTS     = 5;
+const CHECK_DELAY_MS   = 3500;
+const AUTO_RELOAD_SECS = 4;
+const RELOAD_PAUSE_MS  = 800;
+
+// ── DOM refs ──────────────────────────────────────────────────
+const iframe        = document.getElementById('zoho-iframe');
+const statusBar     = document.getElementById('status-bar');
+const statusText    = document.getElementById('status-text');
+const driverName    = document.getElementById('driver-name');
+const attemptCount  = document.getElementById('attempt-count');
+const reloadBtn     = document.getElementById('reload-btn');
+const countdownWrap = document.getElementById('countdown-wrap');
+const countdownRing = document.getElementById('countdown-ring');
+const countdownNum  = document.getElementById('countdown-num');
+const errorScreen   = document.getElementById('error-screen');
+const errorMsg      = document.getElementById('error-msg');
+const formContainer = document.getElementById('form-container');
+
+let attempts        = 0;
+let locationCaptured = false;
+let isChecking      = false;   // prevent overlapping geolocation calls
+let isReloading     = false;   // suppress onIframeLoad during blank→src transition
+let checkTimer      = null;
+let countdownTimer  = null;
+let formUrl         = null;
+
+// ── Boot: resolve driver from ?id= ───────────────────────────
+(function init() {
+  const params   = new URLSearchParams(window.location.search);
+  const driverId = params.get('id');
+
+  if (!driverId) {
+    showError('No driver ID in link. Please use the personal link sent to you on WhatsApp.');
+    return;
+  }
+
+  const driver = DRIVERS.find(d => d.id.toLowerCase() === driverId.toLowerCase());
+
+  if (!driver) {
+    showError(`Unknown driver ID "${driverId}". Please use the personal link sent to you on WhatsApp.`);
+    return;
+  }
+
+  formUrl = buildFormUrl(driver);
+  driverName.textContent = driver.name + ' —';
+  document.title = driver.name + ' | Delivery Form';
+
+  // Request location immediately — don't wait for iframe to load
+  setStatus('waiting', 'Requesting location…');
+  checkLocation();
+
+  // Load iframe
+  iframe.src = formUrl;
+  iframe.addEventListener('load', onIframeLoad);
+})();
+
+function showError(msg) {
+  errorScreen.style.display  = 'flex';
+  formContainer.style.display = 'none';
+  errorMsg.textContent = msg;
+  setStatus('error', 'Invalid link');
+}
+
+// ── Status helper ─────────────────────────────────────────────
+function setStatus(type, message, { showReloadBtn = false, showCountdown = false } = {}) {
+  statusBar.className         = type;
+  statusText.textContent      = message;
+  reloadBtn.style.display     = showReloadBtn ? 'inline-block' : 'none';
+  countdownWrap.style.display = showCountdown ? 'flex' : 'none';
+}
+
+function updateAttemptLabel() {
+  attemptCount.textContent = attempts > 0 ? `(try ${attempts}/${MAX_ATTEMPTS})` : '';
+}
+
+// ── Countdown ring ────────────────────────────────────────────
+function startCountdown(seconds, onComplete) {
+  clearInterval(countdownTimer);
+  let remaining = seconds;
+  countdownNum.textContent = remaining + 's';
+  updateRing(remaining, seconds);
+
+  countdownTimer = setInterval(() => {
+    remaining--;
+    countdownNum.textContent = remaining + 's';
+    updateRing(remaining, seconds);
+    if (remaining <= 0) {
+      clearInterval(countdownTimer);
+      onComplete();
+    }
+  }, 1000);
+}
+
+function updateRing(remaining, total) {
+  const deg = (remaining / total) * 360;
+  countdownRing.style.background = `conic-gradient(#27ae60 ${deg}deg, #c8f0d8 ${deg}deg)`;
+}
+
+function cancelCountdownAndReload() {
+  clearInterval(countdownTimer);
+  countdownWrap.style.display = 'none';
+  doIframeReload();
+}
+
+// ── Reload logic ──────────────────────────────────────────────
+function reloadForm() {
+  if (attempts >= MAX_ATTEMPTS) {
+    setStatus('error', 'Could not capture location. Please allow access and tap Reload.', { showReloadBtn: true });
+    return;
+  }
+  attempts++;
+  updateAttemptLabel();
+  setStatus('waiting', 'Reloading form…');
+  doIframeReload();
+}
+
+function doIframeReload() {
+  isReloading = true;
+  iframe.src = 'about:blank';
+  setTimeout(() => {
+    isReloading = false;
+    iframe.src = formUrl;
+  }, RELOAD_PAUSE_MS);
+}
+
+// ── Location check ────────────────────────────────────────────
+function scheduleCheck() {
+  clearTimeout(checkTimer);
+  checkTimer = setTimeout(checkLocation, CHECK_DELAY_MS);
+}
+
+function checkLocation() {
+  if (locationCaptured || isChecking) return;
+  isChecking = true;
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      isChecking = false;
+      locationCaptured = true;
+      clearTimeout(checkTimer);
+      const lat = pos.coords.latitude.toFixed(4);
+      const lng = pos.coords.longitude.toFixed(4);
+
+      setStatus('success', `Location confirmed ✓ (${lat}, ${lng}) — reloading form…`, { showCountdown: true });
+      attemptCount.textContent = '';
+
+      startCountdown(AUTO_RELOAD_SECS, () => {
+        countdownWrap.style.display = 'none';
+        setStatus('success', `Location confirmed ✓ — form ready`);
+        reloadBtn.style.display = 'inline-block';
+        reloadBtn.textContent   = '↺ Reload again';
+        doIframeReload();
+      });
+    },
+    (err) => {
+      isChecking = false;
+      if (err.code === err.PERMISSION_DENIED) {
+        setStatus('error', 'Location denied. Please allow location in browser settings.', { showReloadBtn: true });
+      } else {
+        if (attempts < MAX_ATTEMPTS) {
+          setStatus('waiting', 'Location not ready — retrying…');
+          setTimeout(reloadForm, 800);
+        } else {
+          setStatus('error', 'Could not capture location after several attempts.', { showReloadBtn: true });
+        }
+      }
+    },
+    { timeout: 8000, maximumAge: 0, enableHighAccuracy: true }
+  );
+}
+
+function onIframeLoad() {
+  // Ignore the blank-page transition and ignore if already done
+  if (isReloading || locationCaptured || isChecking) return;
+  if (attempts === 0) setStatus('waiting', 'Checking location…');
+  scheduleCheck();
+}
+</script>
+</body>
+</html>
