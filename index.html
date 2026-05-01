@@ -16,7 +16,6 @@
       align-items: center;
     }
 
-    /* ── Status bar ── */
     #status-bar {
       width: 100%;
       padding: 10px 16px;
@@ -52,40 +51,7 @@
       0%, 100% { opacity: 1; } 50% { opacity: 0.3; }
     }
 
-    #driver-name {
-      font-weight: 700;
-      margin-right: 4px;
-    }
-
-    #attempt-count {
-      font-size: 11px;
-      opacity: 0.7;
-    }
-
-    /* countdown ring */
-    #countdown-wrap {
-      display: none;
-      align-items: center;
-      gap: 6px;
-      margin-left: auto;
-      font-size: 12px;
-      font-weight: 600;
-      flex-shrink: 0;
-    }
-    #countdown-ring {
-      width: 22px; height: 22px;
-      border-radius: 50%;
-      background: conic-gradient(#27ae60 360deg, #c8f0d8 360deg);
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-    }
-    #countdown-ring::after {
-      content: '';
-      width: 14px; height: 14px;
-      border-radius: 50%;
-      background: #e6f9ef;
-    }
-    #countdown-num { font-size: 11px; min-width: 16px; }
+    #driver-name { font-weight: 700; margin-right: 4px; }
 
     #reload-btn {
       margin-left: auto;
@@ -103,7 +69,6 @@
     }
     #reload-btn:hover { background: #2563eb; }
 
-    /* ── Error / not-found screens ── */
     #error-screen {
       display: none;
       flex-direction: column;
@@ -118,7 +83,6 @@
     #error-screen h2 { font-size: 20px; color: #c0392b; }
     #error-screen p  { font-size: 14px; max-width: 320px; line-height: 1.6; }
 
-    /* ── iframe ── */
     #form-container { width: 100%; flex: 1; }
     iframe {
       width: 100%;
@@ -147,12 +111,8 @@
 </div>
 
 <script>
-// ═══════════════════════════════════════════════════════════════
-//  CONFIG — set your Worker URL here after deploying
-// ═══════════════════════════════════════════════════════════════
-const WORKER_URL = "rapid-snow-6833.aab-group.workers.dev";
-
 // ── Config ────────────────────────────────────────────────────
+const WORKER_URL      = "https://rapid-snow-6833.aab-group.workers.dev";
 const CHECK_DELAY_MS  = 3500;
 const RELOAD_PAUSE_MS = 800;
 
