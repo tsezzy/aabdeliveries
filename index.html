@@ -4,8 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Delivery Confirmation</title>
+
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
     body {
       font-family: 'Segoe UI', sans-serif;
@@ -33,25 +38,53 @@
       top: 0;
       z-index: 10;
     }
-    #status-bar.success { background: #e6f9ef; color: #1a7f4b; }
-    #status-bar.error   { background: #fff0f0; color: #c0392b; }
-    #status-bar.waiting { background: #fff8e1; color: #b07d00; }
+
+    #status-bar.success {
+      background: #e6f9ef;
+      color: #1a7f4b;
+    }
+
+    #status-bar.error {
+      background: #fff0f0;
+      color: #c0392b;
+    }
+
+    #status-bar.waiting {
+      background: #fff8e1;
+      color: #b07d00;
+    }
 
     #status-dot {
-      width: 10px; height: 10px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
       background: #aaa;
       flex-shrink: 0;
     }
-    .success #status-dot { background: #27ae60; }
-    .error   #status-dot { background: #e74c3c; animation: pulse 1s infinite; }
-    .waiting #status-dot { background: #f39c12; animation: pulse 1s infinite; }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; } 50% { opacity: 0.3; }
+    .success #status-dot {
+      background: #27ae60;
     }
 
-    #driver-name { font-weight: 700; margin-right: 4px; }
+    .error #status-dot {
+      background: #e74c3c;
+      animation: pulse 1s infinite;
+    }
+
+    .waiting #status-dot {
+      background: #f39c12;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    #driver-name {
+      font-weight: 700;
+      margin-right: 4px;
+    }
 
     #reload-btn {
       margin-left: auto;
@@ -67,7 +100,10 @@
       white-space: nowrap;
       flex-shrink: 0;
     }
-    #reload-btn:hover { background: #2563eb; }
+
+    #reload-btn:hover {
+      background: #2563eb;
+    }
 
     #error-screen {
       display: none;
@@ -80,10 +116,65 @@
       gap: 12px;
       color: #555;
     }
-    #error-screen h2 { font-size: 20px; color: #c0392b; }
-    #error-screen p  { font-size: 14px; max-width: 320px; line-height: 1.6; }
 
-    #form-container { width: 100%; flex: 1; }
+    #error-screen h2 {
+      font-size: 20px;
+      color: #c0392b;
+    }
+
+    #error-screen p {
+      font-size: 14px;
+      max-width: 320px;
+      line-height: 1.6;
+    }
+
+    #permission-screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      width: 100%;
+      padding: 40px 20px;
+      text-align: center;
+      gap: 14px;
+      color: #333;
+    }
+
+    #permission-screen h2 {
+      font-size: 20px;
+      color: #222;
+    }
+
+    #permission-screen p {
+      font-size: 14px;
+      max-width: 360px;
+      line-height: 1.6;
+      color: #555;
+    }
+
+    #start-btn {
+      margin-top: 8px;
+      padding: 12px 22px;
+      border: none;
+      border-radius: 6px;
+      background: #2563eb;
+      color: white;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    #start-btn:hover {
+      background: #1d4ed8;
+    }
+
+    #form-container {
+      width: 100%;
+      flex: 1;
+      display: none;
+    }
+
     iframe {
       width: 100%;
       height: calc(100vh - 46px);
@@ -92,6 +183,7 @@
     }
   </style>
 </head>
+
 <body>
 
 <div id="status-bar" class="waiting">
@@ -106,25 +198,39 @@
   <p id="error-msg">No driver ID was found in this link. Please use the personal link sent to you on WhatsApp.</p>
 </div>
 
+<div id="permission-screen">
+  <h2>Delivery Confirmation</h2>
+  <p>
+    To continue, please allow location access first. After that, camera permission may be requested for the delivery form.
+  </p>
+  <button id="start-btn" type="button">Start Form</button>
+</div>
+
 <div id="form-container">
-  <iframe id="zoho-iframe" allow="geolocation; camera; microphone; accelerometer; gyroscope; fullscreen" src="about:blank"></iframe>
+  <iframe
+    id="zoho-iframe"
+    allow="geolocation; camera; microphone; accelerometer; gyroscope; fullscreen"
+    src="about:blank">
+  </iframe>
 </div>
 
 <script>
-// ── Config ────────────────────────────────────────────────────
+/* ── Config ──────────────────────────────────────────────────── */
 const WORKER_URL      = "https://rapid-snow-6833.aab-group.workers.dev";
 const CHECK_DELAY_MS  = 3500;
 const RELOAD_PAUSE_MS = 800;
 
-// ── DOM refs ──────────────────────────────────────────────────
-const iframe        = document.getElementById('zoho-iframe');
-const statusBar     = document.getElementById('status-bar');
-const statusText    = document.getElementById('status-text');
-const driverName    = document.getElementById('driver-name');
-const reloadBtn     = document.getElementById('reload-btn');
-const errorScreen   = document.getElementById('error-screen');
-const errorMsg      = document.getElementById('error-msg');
-const formContainer = document.getElementById('form-container');
+/* ── DOM refs ────────────────────────────────────────────────── */
+const iframe          = document.getElementById('zoho-iframe');
+const statusBar       = document.getElementById('status-bar');
+const statusText      = document.getElementById('status-text');
+const driverName      = document.getElementById('driver-name');
+const reloadBtn       = document.getElementById('reload-btn');
+const errorScreen     = document.getElementById('error-screen');
+const errorMsg        = document.getElementById('error-msg');
+const permissionScreen = document.getElementById('permission-screen');
+const startBtn        = document.getElementById('start-btn');
+const formContainer   = document.getElementById('form-container');
 
 let locationCaptured = false;
 let isChecking       = false;
@@ -132,7 +238,7 @@ let isReloading      = false;
 let checkTimer       = null;
 let formUrl          = null;
 
-// ── Boot ──────────────────────────────────────────────────────
+/* ── Boot ────────────────────────────────────────────────────── */
 (async function init() {
   const params   = new URLSearchParams(window.location.search);
   const driverId = (params.get('id') || '').trim();
@@ -157,99 +263,145 @@ let formUrl          = null;
     driverName.textContent = data.name + ' —';
     document.title = data.name + ' | Delivery Form';
 
-    // Request camera + location on parent page simultaneously —
-    // Safari iOS requires top-level grants before iframe can use them
-    setStatus('waiting', 'Requesting permissions…');
-    await Promise.all([
-      requestCameraPermission(),
-      requestLocationPermission()
-    ]);
-
-    iframe.src = formUrl;
     iframe.addEventListener('load', onIframeLoad);
+    startBtn.addEventListener('click', startFormWithPermissions);
 
-  } catch {
+    showPermissionScreen();
+    setStatus('waiting', 'Tap Start Form to allow permissions');
+
+  } catch (err) {
+    console.error(err);
     showError('Could not connect. Please check your internet and try again.');
   }
 })();
 
+/* ── Screens ─────────────────────────────────────────────────── */
 function showError(msg) {
-  errorScreen.style.display   = 'flex';
-  formContainer.style.display = 'none';
+  errorScreen.style.display      = 'flex';
+  permissionScreen.style.display = 'none';
+  formContainer.style.display    = 'none';
   errorMsg.textContent = msg;
   setStatus('error', 'Error');
 }
 
-// ── Camera permission (Safari iOS fix) ───────────────────────
+function showPermissionScreen() {
+  errorScreen.style.display      = 'none';
+  permissionScreen.style.display = 'flex';
+  formContainer.style.display    = 'none';
+}
+
+function showFormScreen() {
+  errorScreen.style.display      = 'none';
+  permissionScreen.style.display = 'none';
+  formContainer.style.display    = 'block';
+}
+
+/* ── Main iOS-friendly permission flow ───────────────────────── */
+async function startFormWithPermissions() {
+  if (!formUrl) {
+    showError('Form link could not be loaded. Please reopen the link and try again.');
+    return;
+  }
+
+  startBtn.disabled = true;
+  startBtn.textContent = 'Please wait…';
+
+  reloadBtn.style.display = 'none';
+  setStatus('waiting', 'Requesting location permission…');
+
+  const locationOk = await requestLocationPermissionStrict();
+
+  if (!locationOk) {
+    startBtn.disabled = false;
+    startBtn.textContent = 'Try Again';
+
+    showPermissionScreen();
+    setStatus('error', 'Location is required. Please allow location and try again.', {
+      showReloadBtn: true
+    });
+
+    reloadBtn.textContent = 'Try Again';
+    reloadBtn.onclick = startFormWithPermissions;
+    return;
+  }
+
+  setStatus('waiting', 'Requesting camera permission…');
+
+  await requestCameraPermission();
+
+  setStatus('waiting', 'Loading form…');
+  showFormScreen();
+
+  iframe.src = formUrl;
+
+  startBtn.disabled = false;
+  startBtn.textContent = 'Start Form';
+}
+
+/* ── Camera permission ───────────────────────────────────────── */
 async function requestCameraPermission() {
   try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      console.warn('Camera API not supported on this browser');
+      return false;
+    }
+
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
     stream.getTracks().forEach(t => t.stop());
+    return true;
+
   } catch (err) {
     console.warn('Camera permission not granted:', err.message);
+    return false;
   }
 }
 
-// ── Location permission (Safari iOS fix) ─────────────────────
-// Wraps geolocation in a Promise so it can run alongside camera
-function requestLocationPermission() {
+/* ── Location permission - strict for first load ─────────────── */
+function requestLocationPermissionStrict() {
   return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      console.warn('Geolocation not supported');
+      locationCaptured = false;
+      resolve(false);
+      return;
+    }
+
     navigator.geolocation.getCurrentPosition(
       () => {
         locationCaptured = true;
-        setStatus('success', 'Location confirmed ✓ — tap Reload to load the form', { showReloadBtn: true });
-        reloadBtn.textContent = '↺ Reload Form';
-        resolve();
+        setStatus('success', 'Location confirmed ✓');
+        resolve(true);
       },
       (err) => {
+        console.warn('Location permission error:', err);
+
+        locationCaptured = false;
+
         if (err.code === err.PERMISSION_DENIED) {
-          setStatus('error', 'Location denied. Please allow location in browser settings.', { showReloadBtn: true });
+          setStatus('error', 'Location denied. Please allow location in browser settings.', {
+            showReloadBtn: true
+          });
         } else {
-          setStatus('waiting', 'Could not get location. Please allow location and try again.', { showReloadBtn: true });
+          setStatus('waiting', 'Could not get location. Please allow location and try again.', {
+            showReloadBtn: true
+          });
         }
-        reloadBtn.textContent = '↺ Try Again';
-        resolve(); // resolve anyway so camera doesn't block
+
+        resolve(false);
       },
-      { timeout: 10000, maximumAge: 0, enableHighAccuracy: true }
+      {
+        timeout: 15000,
+        maximumAge: 0,
+        enableHighAccuracy: true
+      }
     );
   });
 }
 
-// ── Status helper ─────────────────────────────────────────────
-function setStatus(type, message, { showReloadBtn = false } = {}) {
-  statusBar.className     = type;
-  statusText.textContent  = message;
-  reloadBtn.style.display = showReloadBtn ? 'inline-block' : 'none';
-}
-
-// ── Reload logic ──────────────────────────────────────────────
-function reloadForm() {
-  locationCaptured = false;
-  isChecking       = false;
-  clearTimeout(checkTimer);
-  setStatus('waiting', 'Reloading form and re-checking location…');
-  reloadBtn.style.display = 'none';
-  doIframeReload();
-}
-
-function doIframeReload() {
-  isReloading = true;
-  iframe.src = 'about:blank';
-  setTimeout(() => {
-    isReloading = false;
-    iframe.src = formUrl;
-    setTimeout(checkLocation, CHECK_DELAY_MS);
-  }, RELOAD_PAUSE_MS);
-}
-
-// ── Location check ────────────────────────────────────────────
-function scheduleCheck() {
-  clearTimeout(checkTimer);
-  checkTimer = setTimeout(checkLocation, CHECK_DELAY_MS);
-}
-
+/* ── Location check after iframe load/reload ─────────────────── */
 function checkLocation() {
   if (locationCaptured || isChecking) return;
+
   isChecking = true;
 
   navigator.geolocation.getCurrentPosition(
@@ -257,27 +409,89 @@ function checkLocation() {
       isChecking       = false;
       locationCaptured = true;
       clearTimeout(checkTimer);
-      setStatus('success', 'Location confirmed ✓ — tap Reload to load the form', { showReloadBtn: true });
+
+      setStatus('success', 'Location confirmed ✓', {
+        showReloadBtn: true
+      });
+
       reloadBtn.textContent = '↺ Reload Form';
+      reloadBtn.onclick = reloadForm;
     },
     (err) => {
       isChecking = false;
+
       if (err.code === err.PERMISSION_DENIED) {
-        setStatus('error', 'Location denied. Please allow location in browser settings.', { showReloadBtn: true });
+        setStatus('error', 'Location denied. Please allow location in browser settings.', {
+          showReloadBtn: true
+        });
       } else {
-        setStatus('waiting', 'Could not get location. Please allow location and try again.', { showReloadBtn: true });
+        setStatus('waiting', 'Could not get location. Please allow location and try again.', {
+          showReloadBtn: true
+        });
       }
-      reloadBtn.textContent = '↺ Try Again';
+
+      reloadBtn.textContent = 'Try Again';
+      reloadBtn.onclick = startFormWithPermissions;
     },
-    { timeout: 8000, maximumAge: 0, enableHighAccuracy: true }
+    {
+      timeout: 8000,
+      maximumAge: 0,
+      enableHighAccuracy: true
+    }
   );
+}
+
+/* ── Status helper ───────────────────────────────────────────── */
+function setStatus(type, message, { showReloadBtn = false } = {}) {
+  statusBar.className     = type;
+  statusText.textContent  = message;
+  reloadBtn.style.display = showReloadBtn ? 'inline-block' : 'none';
+}
+
+/* ── Reload logic ────────────────────────────────────────────── */
+function reloadForm() {
+  locationCaptured = false;
+  isChecking       = false;
+  clearTimeout(checkTimer);
+
+  setStatus('waiting', 'Rechecking location permission…');
+  reloadBtn.style.display = 'none';
+
+  startFormWithPermissions();
+}
+
+function doIframeReload() {
+  isReloading = true;
+  iframe.src = 'about:blank';
+
+  setTimeout(() => {
+    isReloading = false;
+    iframe.src = formUrl;
+    setTimeout(checkLocation, CHECK_DELAY_MS);
+  }, RELOAD_PAUSE_MS);
+}
+
+/* ── Iframe load ─────────────────────────────────────────────── */
+function scheduleCheck() {
+  clearTimeout(checkTimer);
+  checkTimer = setTimeout(checkLocation, CHECK_DELAY_MS);
 }
 
 function onIframeLoad() {
   if (isReloading || isChecking) return;
-  // On manual reload: re-check location
-  if (!locationCaptured) scheduleCheck();
+
+  if (!locationCaptured) {
+    scheduleCheck();
+  } else {
+    setStatus('success', 'Location confirmed ✓', {
+      showReloadBtn: true
+    });
+
+    reloadBtn.textContent = '↺ Reload Form';
+    reloadBtn.onclick = reloadForm;
+  }
 }
 </script>
+
 </body>
 </html>
