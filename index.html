@@ -107,8 +107,7 @@
 </div>
 
 <div id="form-container">
-  <iframe id="zoho-iframe" allow="geolocation; camera; microphone; accelerometer; gyroscope; fullscreen"
- src="about:blank"></iframe>
+  <iframe id="zoho-iframe" allow="geolocation; camera; microphone; accelerometer; gyroscope; fullscreen" src="about:blank"></iframe>
 </div>
 
 <script>
@@ -158,6 +157,11 @@ let formUrl          = null;
     driverName.textContent = data.name + ' —';
     document.title = data.name + ' | Delivery Form';
 
+    // Request camera on parent page first — required for Safari iOS
+    // which ignores iframe allow attribute unless top-level already granted
+    setStatus('waiting', 'Requesting camera access…');
+    await requestCameraPermission();
+
     setStatus('waiting', 'Requesting location…');
     checkLocation();
     iframe.src = formUrl;
@@ -173,6 +177,22 @@ function showError(msg) {
   formContainer.style.display = 'none';
   errorMsg.textContent = msg;
   setStatus('error', 'Error');
+}
+
+// ── Camera permission (Safari iOS fix) ───────────────────────
+// Safari only grants camera to iframes if the parent page has
+// already obtained it in the same browsing session.
+// We request it here, then immediately stop the stream — we only
+// need the grant, not an actual video feed.
+async function requestCameraPermission() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    stream.getTracks().forEach(t => t.stop()); // stop immediately, just needed the grant
+  } catch (err) {
+    // Denied or unavailable — continue anyway, form may still work
+    // on Android/Chrome which doesn't have this restriction
+    console.warn('Camera permission not granted:', err.message);
+  }
 }
 
 // ── Status helper ─────────────────────────────────────────────
