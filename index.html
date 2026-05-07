@@ -157,13 +157,14 @@ let formUrl          = null;
     driverName.textContent = data.name + ' —';
     document.title = data.name + ' | Delivery Form';
 
-    // Request camera on parent page first — required for Safari iOS
-    // which ignores iframe allow attribute unless top-level already granted
-    setStatus('waiting', 'Requesting camera access…');
-    await requestCameraPermission();
+    // Request camera + location on parent page simultaneously —
+    // Safari iOS requires top-level grants before iframe can use them
+    setStatus('waiting', 'Requesting permissions…');
+    await Promise.all([
+      requestCameraPermission(),
+      requestLocationPermission()
+    ]);
 
-    setStatus('waiting', 'Requesting location…');
-    checkLocation();
     iframe.src = formUrl;
     iframe.addEventListener('load', onIframeLoad);
 
@@ -180,19 +181,38 @@ function showError(msg) {
 }
 
 // ── Camera permission (Safari iOS fix) ───────────────────────
-// Safari only grants camera to iframes if the parent page has
-// already obtained it in the same browsing session.
-// We request it here, then immediately stop the stream — we only
-// need the grant, not an actual video feed.
 async function requestCameraPermission() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    stream.getTracks().forEach(t => t.stop()); // stop immediately, just needed the grant
+    stream.getTracks().forEach(t => t.stop());
   } catch (err) {
-    // Denied or unavailable — continue anyway, form may still work
-    // on Android/Chrome which doesn't have this restriction
     console.warn('Camera permission not granted:', err.message);
   }
+}
+
+// ── Location permission (Safari iOS fix) ─────────────────────
+// Wraps geolocation in a Promise so it can run alongside camera
+function requestLocationPermission() {
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      () => {
+        locationCaptured = true;
+        setStatus('success', 'Location confirmed ✓ — tap Reload to load the form', { showReloadBtn: true });
+        reloadBtn.textContent = '↺ Reload Form';
+        resolve();
+      },
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) {
+          setStatus('error', 'Location denied. Please allow location in browser settings.', { showReloadBtn: true });
+        } else {
+          setStatus('waiting', 'Could not get location. Please allow location and try again.', { showReloadBtn: true });
+        }
+        reloadBtn.textContent = '↺ Try Again';
+        resolve(); // resolve anyway so camera doesn't block
+      },
+      { timeout: 10000, maximumAge: 0, enableHighAccuracy: true }
+    );
+  });
 }
 
 // ── Status helper ─────────────────────────────────────────────
@@ -254,8 +274,9 @@ function checkLocation() {
 }
 
 function onIframeLoad() {
-  if (isReloading || locationCaptured || isChecking) return;
-  scheduleCheck();
+  if (isReloading || isChecking) return;
+  // On manual reload: re-check location
+  if (!locationCaptured) scheduleCheck();
 }
 </script>
 </body>
